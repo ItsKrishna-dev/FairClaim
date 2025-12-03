@@ -3,7 +3,7 @@ Database Seeding Script
 Creates dummy users for testing
 """
 from app.database import SessionLocal
-from app import services
+from app.services import services
 from app.models import User
 
 def seed_users():

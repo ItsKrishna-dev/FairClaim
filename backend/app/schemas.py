@@ -1,12 +1,122 @@
-"""
-Pydantic Schemas for Request/Response validation
-Defines data validation and serialization for API endpoints
-"""
-from pydantic import BaseModel, EmailStr, Field, validator
-from typing import Optional, List
+from pydantic import BaseModel, Field, validator , EmailStr ,field_validator
 from datetime import datetime
+from typing import Optional, List , Literal
 from enum import Enum
 
+from typing import Optional, Literal
+
+# ============= CASE SCHEMAS =============
+class CaseStatus(str, Enum):
+    PENDING = "PENDING"
+    UNDER_REVIEW = "UNDER_REVIEW"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    PAYMENT_PROCESSING = "PAYMENT_PROCESSING"
+    COMPLETED = "COMPLETED"
+
+class CaseStage(str, Enum):
+    FIR = "FIR"
+    CHARGESHEET = "CHARGESHEET"
+    CONVICTION = "CONVICTION"
+
+class CaseBase(BaseModel):
+    victim_name: str = Field(..., min_length=2, max_length=100)
+    victim_aadhaar: str = Field(..., pattern=r"^\d{12}$")
+    victim_phone: str = Field(..., min_length=10, max_length=15)
+    victim_email: Optional[str] = None
+    
+    incident_description: str = Field(..., min_length=10)
+    incident_date: datetime
+    incident_location: str = Field(..., min_length=5)
+    
+    stage: CaseStage
+    compensation_amount: float = Field(..., gt=0)
+    bank_account_number: str = Field(..., min_length=9, max_length=18)
+    ifsc_code: str = Field(..., min_length=11, max_length=11)
+    
+    @validator('incident_date')
+    def validate_incident_date(cls, v):
+        if v > datetime.now():
+            raise ValueError('Incident date cannot be in the future')
+        return v
+
+class CaseCreate(CaseBase):
+    pass
+
+class CaseUpdate(BaseModel):
+    status: Optional[CaseStatus] = None
+    assigned_officer: Optional[str] = None
+    remarks: Optional[str] = None
+
+class CaseResponse(CaseBase):
+    id: int
+    case_number: str
+    status: str
+    uploaded_documents: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    assigned_officer: Optional[str] = None
+    remarks: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+class CaseListResponse(BaseModel):
+    cases: List[CaseResponse]
+    total: int
+    page: int
+    page_size: int
+
+# ============= GRIEVANCE SCHEMAS =============
+class GrievanceStatus(str, Enum):
+    OPEN = "OPEN"
+    IN_PROGRESS = "IN_PROGRESS"
+    RESOLVED = "RESOLVED"
+    CLOSED = "CLOSED"
+    ESCALATED = "ESCALATED"
+
+class GrievancePriority(str, Enum):
+    LOW = "LOW"
+    MEDIUM = "MEDIUM"
+    HIGH = "HIGH"
+    CRITICAL = "CRITICAL"
+
+class GrievanceBase(BaseModel):
+    case_id: int
+    title: str = Field(..., min_length=5, max_length=200)
+    description: str = Field(..., min_length=10)
+    category: str = Field(..., min_length=3, max_length=100)
+    contact_name: str = Field(..., min_length=2, max_length=100)
+    contact_phone: str = Field(..., min_length=10, max_length=15)
+    contact_email: Optional[str] = None
+
+class GrievanceCreate(GrievanceBase):
+    pass
+
+class GrievanceUpdate(BaseModel):
+    status: Optional[GrievanceStatus] = None
+    resolution_notes: Optional[str] = None
+    resolved_by: Optional[str] = None
+
+class GrievanceResponse(GrievanceBase):
+    id: int
+    grievance_number: str
+    priority: str
+    status: str
+    resolution_notes: Optional[str] = None
+    resolved_at: Optional[datetime] = None
+    resolved_by: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class GrievanceListResponse(BaseModel):
+    grievances: List[GrievanceResponse]
+    total: int
+    page: int
+    page_size: int
 
 # ==================== ENUMS FOR SCHEMAS ====================
 
@@ -47,22 +157,30 @@ class UserBase(BaseModel):
     phone: Optional[str] = Field(None, pattern=r'^\+?[1-9]\d{9,14}$')
     role: UserRoleEnum
 
-
+class UserRole(str, Enum):
+    ADMIN = "admin"
+    OFFICER = "officer"
+    VICTIM = "victim"
 class UserCreate(BaseModel):
-    """Schema for user registration"""
     email: EmailStr
-    password: str = Field(..., min_length=6, max_length=100)
-    full_name: str = Field(..., min_length=2, max_length=255)
+    password: str = Field(
+        ..., 
+        min_length=6, 
+        max_length=72,  # ✅ bcrypt limit
+        description="Password: 6-72 characters"
+    )
+    full_name: str
+    role: Literal["admin", "officer", "victim"]
     phone: Optional[str] = Field(None, pattern=r'^\+?[1-9]\d{9,14}$')
-    role: UserRoleEnum
     aadhaar_number: Optional[str] = Field(None, pattern=r'^\d{12}$')
     address: Optional[str] = None
     
-    @validator('password')
-    def validate_password(cls, v):
-        """Validate password strength"""
-        if len(v) < 6:
-            raise ValueError('Password must be at least 6 characters long')
+    @field_validator('password')
+    @classmethod
+    def validate_password_length(cls, v):
+        """Ensure password is within bcrypt limits"""
+        if len(v) > 72:
+            raise ValueError('Password cannot be longer than 72 characters')
         return v
 
 
@@ -109,95 +227,6 @@ class TokenPayload(BaseModel):
     """Schema for JWT token payload"""
     sub: Optional[int] = None  # User ID
     exp: Optional[int] = None  # Expiration time
-
-
-# ==================== CASE SCHEMAS (DEV B) ====================
-
-class CaseBase(BaseModel):
-    """Base case schema"""
-    title: str = Field(..., min_length=5, max_length=500)
-    description: Optional[str] = None
-    fir_number: str = Field(..., min_length=3, max_length=50)
-    case_type: Optional[str] = None
-
-
-class CaseCreate(CaseBase):
-    """Schema for creating a new case"""
-    fund_amount: float = Field(default=0.0, ge=0)
-
-
-class CaseUpdate(BaseModel):
-    """Schema for updating case"""
-    title: Optional[str] = Field(None, min_length=5, max_length=500)
-    description: Optional[str] = None
-    status: Optional[CaseStatusEnum] = None
-    fund_amount: Optional[float] = Field(None, ge=0)
-    fund_disbursed: Optional[float] = Field(None, ge=0)
-
-
-class CaseResponse(CaseBase):
-    """Schema for case response"""
-    id: int
-    user_id: int
-    status: str
-    fund_amount: float
-    fund_disbursed: float
-    document_path: Optional[str]
-    document_verified: bool
-    verification_confidence: Optional[float]
-    created_at: datetime
-    updated_at: Optional[datetime]
-    
-    class Config:
-        from_attributes = True
-
-
-class CaseListResponse(BaseModel):
-    """Schema for list of cases"""
-    total: int
-    cases: List[CaseResponse]
-
-
-# ==================== GRIEVANCE SCHEMAS (DEV B) ====================
-
-class GrievanceBase(BaseModel):
-    """Base grievance schema"""
-    subject: str = Field(..., min_length=5, max_length=500)
-    description: str = Field(..., min_length=10)
-
-
-class GrievanceCreate(GrievanceBase):
-    """Schema for creating grievance"""
-    case_id: int = Field(..., gt=0)
-
-
-class GrievanceUpdate(BaseModel):
-    """Schema for updating grievance"""
-    status: Optional[GrievanceStatusEnum] = None
-    resolution_notes: Optional[str] = None
-
-
-class GrievanceResponse(GrievanceBase):
-    """Schema for grievance response"""
-    id: int
-    case_id: int
-    user_id: int
-    priority: str
-    status: str
-    resolution_notes: Optional[str]
-    resolved_at: Optional[datetime]
-    created_at: datetime
-    updated_at: Optional[datetime]
-    
-    class Config:
-        from_attributes = True
-
-
-class GrievanceListResponse(BaseModel):
-    """Schema for list of grievances"""
-    total: int
-    grievances: List[GrievanceResponse]
-
 
 # ==================== DOCUMENT VERIFICATION SCHEMAS ====================
 
@@ -264,3 +293,4 @@ class ErrorResponse(BaseModel):
     detail: str
     error_code: Optional[str] = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+

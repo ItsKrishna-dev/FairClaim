@@ -7,7 +7,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.schemas import UserCreate, UserLogin, Token, UserResponse
-from app import services
+from app.services import services
 from app.models import User
 
 router = APIRouter()
@@ -62,7 +62,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
             email=user_data.email,
             password=user_data.password,
             full_name=user_data.full_name,
-            role=user_data.role.value,
+            role=user_data.role,
             phone=user_data.phone,
             aadhaar_number=user_data.aadhaar_number,
             address=user_data.address
@@ -134,27 +134,20 @@ def get_current_user_info(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ):
-    """
-    Get current logged-in user information
+    """Get current logged-in user information"""
     
-    **Headers Required:**
-    - Authorization: Bearer <access_token>
-    
-    **Returns:**
-    - Current user object
-    
-    **Errors:**
-    - 401: Invalid or expired token
-    - 404: User not found
-    """
-    
-    # Extract token from Authorization header
+    # DEBUG: Log the raw token
     token = credentials.credentials
+    print(f"🔍 DEBUG: Received token: {token[:20]}..." if len(token) > 20 else f"🔍 DEBUG: Received token: {token}")
     
     # Verify and decode token
     payload = services.verify_token(token)
     
+    # DEBUG: Log payload result
+    print(f"🔍 DEBUG: Token payload: {payload}")
+    
     if not payload:
+        print("❌ DEBUG: Token verification failed - payload is None")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token. Please login again.",
@@ -163,7 +156,10 @@ def get_current_user_info(
     
     # Extract user ID from token
     user_id = payload.get("sub")
+    print(f"🔍 DEBUG: Extracted user_id: {user_id}")
+    
     if not user_id:
+        print("❌ DEBUG: No 'sub' field in token payload")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload",
@@ -172,6 +168,7 @@ def get_current_user_info(
     
     # Get user from database
     user = services.get_user_by_id(db, int(user_id))
+    print(f"🔍 DEBUG: User found: {user.email if user else 'None'}")
     
     if not user:
         raise HTTPException(

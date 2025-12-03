@@ -738,13 +738,32 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 
 def verify_token(token: str) -> Optional[dict]:
-    """Verify and decode JWT token"""
+    """Verify and decode JWT token with detailed error logging"""
     try:
+        print(f"🔍 Verifying token with SECRET_KEY: {SECRET_KEY[:10]}...")
+        print(f"🔍 Algorithm: {ALGORITHM}")
+        
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        
+        print(f"✅ Token decoded successfully: {payload}")
         return payload
-    except JWTError as e:
-        print(f"Token verification failed: {str(e)}")
+        
+    except jwt.ExpiredSignatureError:
+        print("❌ Token verification failed: Token has expired")
         return None
+        
+    except jwt.JWTClaimsError as e:
+        print(f"❌ Token verification failed: Invalid claims - {str(e)}")
+        return None
+        
+    except jwt.JWTError as e:
+        print(f"❌ Token verification failed: {type(e).__name__} - {str(e)}")
+        return None
+        
+    except Exception as e:
+        print(f"❌ Unexpected error during token verification: {type(e).__name__} - {str(e)}")
+        return None
+
 
 
 # ==================== USER CRUD OPERATIONS ====================
