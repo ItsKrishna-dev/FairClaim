@@ -29,7 +29,7 @@ wheels/
 .env.*.local
 
 # Database
-*.db
+
 *.sqlite
 *.sqlite3
 fairclaim.db

@@ -22,7 +22,7 @@ if __name__ == "__main__":
     print("=" * 60)
     
     uvicorn.run(
-        "app.main.app",
+        "app.main:app",
         host=HOST,
         port=PORT,
         reload=RELOAD,
