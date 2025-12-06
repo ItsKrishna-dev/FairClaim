@@ -28,11 +28,7 @@ wheels/
 .env.local
 .env.*.local
 
-# Database
 
-*.sqlite
-*.sqlite3
-fairclaim.db
 
 # Uploads
 uploads/

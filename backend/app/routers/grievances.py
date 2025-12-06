@@ -131,10 +131,10 @@ def list_grievances(
         query = query.filter(Grievance.case_id.in_(victim_case_ids))
     
     elif current_user.role == "OFFICER":
-        # Get case IDs for cases officer is involved with
+        # Get case IDs for cases officer is assigned to or created
         officer_cases = db.query(Case.id).filter(
-            (Case.created_by_user_id == current_user.id) |
-            (Case.assigned_officer_user_id == current_user.id)
+            (Case.assigned_officer == current_user.full_name) |
+            (Case.created_by_user_id == current_user.id)
         ).all()
         officer_case_ids = [c[0] for c in officer_cases]
         

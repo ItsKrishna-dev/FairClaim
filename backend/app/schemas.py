@@ -256,6 +256,7 @@ class GrievanceStatistics(BaseModel):
     """Schema for grievance statistics"""
     total: int
     pending: int
+    open: int
     in_progress: int
     resolved: int
     high_priority: int

@@ -1,6 +1,6 @@
 from fastapi import FastAPI , Request , status
 from fastapi.middleware.cors import CORSMiddleware
-from app.database import engine, Base
+from app.database import engine, Base, SessionLocal
 from app.routers import cases, grievances
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -9,10 +9,32 @@ from app.routers import verify
 import time
 
 from app.routers import auth, dashboard
+from app.utils.seed_data import seed_users, seed_cases, seed_grievances
+from app.models import Case, Grievance
+
 # Create database tables
 print("🔄 Creating database tables...")
 Base.metadata.create_all(bind=engine)
 print("✅ Database tables created successfully")
+
+# Seed database on startup
+print("\n📊 Initializing database with seed data...")
+try:
+    db = SessionLocal()
+    
+    # Clean existing Cases and Grievances to prevent duplicates
+    print("🧹 Cleaning old Case and Grievance data...")
+    db.query(Grievance).delete()
+    db.query(Case).delete()
+    db.commit()
+    
+    seed_users(db)
+    seeded_cases = seed_cases(db)
+    seed_grievances(db, seeded_cases)
+    db.close()
+    print("✅ Database seeding completed successfully\n")
+except Exception as e:
+    print(f"⚠️  Database seeding encountered an issue: {e}\n")
 
 # Initialize FastAPI application
 app = FastAPI(

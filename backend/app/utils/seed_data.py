@@ -1,16 +1,98 @@
-
+"""
+Combined Database Seeding Script
+Seeds Users, Cases, and Grievances together.
+"""
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import random
-from app.models import Case, Grievance
+
+# App imports
 from app.database import SessionLocal, engine, Base
+from app.models import Case, Grievance, User
+from app.services import services
+
+def seed_users(db: Session):
+    """Create dummy users in database if they don't exist"""
+    print("\n" + "=" * 60)
+    print("👤 Seeding Users")
+    print("=" * 60)
+    
+    users_data = [
+        {
+            "email": "victim1@fairclaim.com",
+            "password": "victim123",
+            "full_name": "Rajesh Kumar",
+            "role": "victim",
+            "phone": "+919876543210",
+            "aadhaar_number": "123456789012",
+            "address": "Village Rampur, District Katihar, Bihar - 854105"
+        },
+        {
+            "email": "victim2@fairclaim.com",
+            "password": "victim123",
+            "full_name": "Priya Sharma",
+            "role": "victim",
+            "phone": "+919876543211",
+            "aadhaar_number": "123456789013",
+            "address": "Village Bhagalpur, District Munger, Bihar - 811201"
+        },
+        {
+            "email": "victim3@fairclaim.com",
+            "password": "victim123",
+            "full_name": "Amit Patel",
+            "role": "victim",
+            "phone": "+919876543212",
+            "aadhaar_number": "123456789014",
+            "address": "Village Sultanpur, District Kushinagar, UP - 274401"
+        },
+        {
+            "email": "official1@fairclaim.com",
+            "password": "official123",
+            "full_name": "Sneha Reddy",
+            "role": "official",
+            "phone": "+919876543213",
+            "address": "District Collectorate, Patna, Bihar - 800001"
+        },
+        {
+            "email": "official2@fairclaim.com",
+            "password": "official123",
+            "full_name": "Vikram Singh",
+            "role": "official",
+            "phone": "+919876543214",
+            "address": "District Magistrate Office, Lucknow, UP - 226001"
+        },
+    ]
+    
+    success_count = 0
+    
+    for user_data in users_data:
+        try:
+            # Check if user already exists
+            existing = db.query(User).filter(User.email == user_data["email"]).first()
+            if existing:
+                print(f"⏭️  Skipped: {user_data['email']} (already exists)")
+                continue
+            
+            # Create user
+            services.create_user(db, **user_data)
+            print(f"✅ Created: {user_data['email']} ({user_data['role']})")
+            success_count += 1
+            
+        except Exception as e:
+            print(f"❌ Error creating {user_data['email']}: {str(e)}")
+
+    print(f"✅ Users processing complete. Added: {success_count}")
+
 
 def seed_cases(db: Session):
-    """Seed 10 dummy cases"""
-    print("📦 Seeding cases...")
+    """Seed 10 dummy cases with random officer assignment"""
+    print("\n" + "=" * 60)
+    print("📦 Seeding Cases")
+    print("=" * 60)
     
     stages = ["FIR", "CHARGESHEET", "CONVICTION"]
     statuses = ["PENDING", "UNDER_REVIEW", "APPROVED", "REJECTED", "PAYMENT_PROCESSING", "COMPLETED"]
+    officers = ["Sneha Reddy", "Vikram Singh"]
     
     dummy_cases = []
     for i in range(1, 11):
@@ -19,7 +101,7 @@ def seed_cases(db: Session):
             victim_name=f"Victim Name {i}",
             victim_aadhaar=f"12345678{i:04d}",
             victim_phone=f"+9198765432{i:02d}",
-            victim_email=f"victim{i}@example.com",
+            victim_email=f"victim{i}@fairclaim.com",
             incident_description=f"Case {i}: Detailed description of atrocity incident involving caste-based discrimination and violence.",
             incident_date=datetime.now() - timedelta(days=random.randint(1, 365)),
             incident_location=f"Village {i}, District {chr(65 + i % 5)}, State",
@@ -28,7 +110,7 @@ def seed_cases(db: Session):
             compensation_amount=random.choice([50000, 100000, 150000, 200000, 250000]),
             bank_account_number=f"123456{i:010d}",
             ifsc_code=f"SBIN000{i:04d}",
-            assigned_officer=f"Officer {chr(65 + i % 5)}" if i % 2 == 0 else None,
+            assigned_officer=random.choice(officers),
             remarks=f"Case {i} under review" if i % 3 == 0 else None
         )
         dummy_cases.append(case)
@@ -38,9 +120,12 @@ def seed_cases(db: Session):
     print(f"✅ Seeded {len(dummy_cases)} cases")
     return dummy_cases
 
+
 def seed_grievances(db: Session, cases):
     """Seed grievances linked to cases"""
-    print("📦 Seeding grievances...")
+    print("\n" + "=" * 60)
+    print("📝 Seeding Grievances")
+    print("=" * 60)
     
     grievance_templates = [
         ("Payment not received", "Compensation not credited to bank account after 60 days. Need urgent assistance.", "payment delay"),
@@ -54,7 +139,7 @@ def seed_grievances(db: Session, cases):
         ("Delayed chargesheet", "Chargesheet not filed even after 90 days of FIR", "legal delay"),
         ("No response from court", "Court hearing dates not communicated properly", "communication issue"),
     ]
-    
+    grievance_status=["PENDING","OPEN","RESOLVED"]
     dummy_grievances = []
     for i, case in enumerate(cases):
         if i < len(grievance_templates):
@@ -66,7 +151,7 @@ def seed_grievances(db: Session, cases):
                 description=desc,
                 category=category,
                 priority="MEDIUM",  # Will be auto-classified in real API
-                status="OPEN" if i % 2 == 0 else "IN_PROGRESS",
+                status=random.choice(grievance_status),
                 contact_name=case.victim_name,
                 contact_phone=case.victim_phone,
                 contact_email=case.victim_email,
@@ -79,32 +164,53 @@ def seed_grievances(db: Session, cases):
     db.commit()
     print(f"✅ Seeded {len(dummy_grievances)} grievances")
 
+
 def seed_all():
-    """Seed all data"""
-    print("\n🌱 Starting database seeding...\n")
+    """Orchestrate the seeding of all data"""
+    print("\n🌱 Starting FULL database seeding...\n")
     
-    # Create tables
+    # 1. Ensure tables exist
     Base.metadata.create_all(bind=engine)
     
-    # Get database session
+    # 2. Get database session
     db = SessionLocal()
     
     try:
-        # Clear existing data (optional)
+        # 3. Seed Users (We do this first, and we don't delete existing users to preserve logins)
+        seed_users(db)
+
+        # 4. Clear existing Cases/Grievances to prevent duplicates on re-runs
+        print("\n🧹 Cleaning old Case and Grievance data...")
         db.query(Grievance).delete()
         db.query(Case).delete()
         db.commit()
         
-        # Seed data
+        # 5. Seed Cases
         cases = seed_cases(db)
+        
+        # 6. Seed Grievances (linked to the cases we just created)
         seed_grievances(db, cases)
         
-        print("\n✅ Database seeding completed successfully!\n")
+        print("\n" + "=" * 60)
+        print("🎉 Database seeding completed successfully!")
+        print("=" * 60)
+
+        # Print login credentials reminder
+        print("\n📝 Test Credentials:")
+        print("-" * 60)
+        print("Victims:")
+        print("  Email: victim1@fairclaim.com | Password: victim123")
+        print("  Email: victim2@fairclaim.com | Password: victim123")
+        print("\nOfficials:")
+        print("  Email: official1@fairclaim.com | Password: official123")
+        print("-" * 60 + "\n")
+
     except Exception as e:
         db.rollback()
         print(f"\n❌ Error seeding database: {str(e)}\n")
     finally:
         db.close()
+
 
 if __name__ == "__main__":
     seed_all()

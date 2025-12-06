@@ -72,7 +72,7 @@ def list_cases(
     elif current_user.role == "OFFICER":
         # Officers see cases assigned to them or created by them
         query = query.filter(
-            (Case.assigned_officer_user_id == current_user.id) |
+            (Case.assigned_officer == current_user.full_name) |
             (Case.created_by_user_id == current_user.id)
         )
     

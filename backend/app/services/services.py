@@ -1044,20 +1044,26 @@ def get_dashboard_statistics(db: Session, user_role: str = None) -> Dict:
             func.count(Case.id)
         ).group_by(Case.status).all()
         
-        status_breakdown = {status.name: count for status, count in cases_by_status}
+        # Handle status as string (not enum) since it's stored as String in DB
+        status_breakdown = {status: count for status, count in cases_by_status}
         
-        total_allocated = db.query(func.sum(Case.fund_amount)).scalar() or 0.0
-        total_disbursed = db.query(func.sum(Case.fund_disbursed)).scalar() or 0.0
+        total_allocated = db.query(func.sum(Case.compensation_amount)).scalar() or 0.0
+        total_disbursed = db.query(func.sum(Case.compensation_amount)).filter(
+            Case.status == "COMPLETED"
+        ).scalar() or 0.0
         
         total_grievances = db.query(Grievance).count()
         pending_grievances = db.query(Grievance).filter(
-            Grievance.status == GrievanceStatus.PENDING
+            Grievance.status == "PENDING"
+        ).count()
+        open_grievances = db.query(Grievance).filter(
+            Grievance.status == "OPEN"
         ).count()
         in_progress = db.query(Grievance).filter(
-            Grievance.status == GrievanceStatus.IN_PROGRESS
+            Grievance.status == "IN_PROGRESS"
         ).count()
         resolved = db.query(Grievance).filter(
-            Grievance.status == GrievanceStatus.RESOLVED
+            Grievance.status == "RESOLVED"
         ).count()
         high_priority = db.query(Grievance).filter(
             Grievance.priority == "HIGH"
@@ -1074,6 +1080,7 @@ def get_dashboard_statistics(db: Session, user_role: str = None) -> Dict:
             "grievances": {
                 "total": total_grievances,
                 "pending": pending_grievances,
+                "open": open_grievances,
                 "in_progress": in_progress,
                 "resolved": resolved,
                 "high_priority": high_priority
@@ -1093,6 +1100,7 @@ def get_dashboard_statistics(db: Session, user_role: str = None) -> Dict:
             "grievances": {
                 "total": 0,
                 "pending": 0,
+                "open": 0,
                 "in_progress": 0,
                 "resolved": 0,
                 "high_priority": 0
