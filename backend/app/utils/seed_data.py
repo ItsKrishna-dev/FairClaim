@@ -122,7 +122,7 @@ def seed_cases(db: Session):
 
 
 def seed_grievances(db: Session, cases):
-    """Seed grievances linked to cases"""
+    """Seed grievances linked to cases with escalation logic"""
     print("\n" + "=" * 60)
     print("📝 Seeding Grievances")
     print("=" * 60)
@@ -144,6 +144,18 @@ def seed_grievances(db: Session, cases):
     for i, case in enumerate(cases):
         if i < len(grievance_templates):
             title, desc, category = grievance_templates[i]
+            
+            # Determine escalation: is_escalated = True if unresolved and created > 10 days ago
+            creation_days_ago = random.randint(1, 20)  # Some < 10 days, some > 10 days
+            created_at = datetime.utcnow() - timedelta(days=creation_days_ago)
+            
+            # Check if resolved
+            is_resolved = (i % 4 == 0)  # Some are marked as resolved
+            resolved_at = datetime.utcnow() - timedelta(days=random.randint(1, 10)) if is_resolved else None
+            
+            # Escalate if: NOT resolved AND created > 10 days ago
+            is_escalated = (not is_resolved) and (creation_days_ago > 10)
+            
             grievance = Grievance(
                 grievance_number=f"GR-2025120200{i+1:02d}",
                 case_id=case.id,
@@ -155,8 +167,10 @@ def seed_grievances(db: Session, cases):
                 contact_name=case.victim_name,
                 contact_phone=case.victim_phone,
                 contact_email=case.victim_email,
-                resolved_at=datetime.utcnow() - timedelta(days=random.randint(1, 10)) if i % 4 == 0 else None,
-                resolved_by=f"Support Officer {chr(65 + i % 3)}" if i % 4 == 0 else None
+                created_at=created_at,
+                resolved_at=resolved_at,
+                resolved_by=f"Support Officer {chr(65 + i % 3)}" if is_resolved else None,
+                is_escalated=is_escalated
             )
             dummy_grievances.append(grievance)
     

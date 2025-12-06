@@ -89,6 +89,7 @@ class GrievanceBase(BaseModel):
     contact_name: str = Field(..., min_length=2, max_length=100)
     contact_phone: str = Field(..., min_length=10, max_length=15)
     contact_email: Optional[str] = None
+    is_escalated: bool = False
 
 class GrievanceCreate(GrievanceBase):
     pass

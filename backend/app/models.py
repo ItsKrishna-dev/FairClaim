@@ -47,7 +47,7 @@ class Case(Base):
     victim_phone = Column(String(15), nullable=False)
     victim_email = Column(String(100), nullable=True)
     
-    # Incident Details
+    # Incident Details 
     incident_description = Column(Text, nullable=False)
     incident_date = Column(DateTime, nullable=False)
     incident_location = Column(String(255), nullable=False)
@@ -107,6 +107,9 @@ class Grievance(Base):
     resolution_notes = Column(Text, nullable=True)
     resolved_at = Column(DateTime, nullable=True)
     resolved_by = Column(String(100), nullable=True)
+    
+    # Escalation
+    is_escalated = Column(Boolean, default=False, nullable=False)
     
     # Tracking
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
