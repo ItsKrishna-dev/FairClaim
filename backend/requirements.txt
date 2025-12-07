@@ -15,3 +15,4 @@ email-validator
 opencv-python
 bcrypt
 passlib
+pdf2image

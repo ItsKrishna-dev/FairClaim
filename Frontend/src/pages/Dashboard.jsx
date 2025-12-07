@@ -66,7 +66,7 @@ export default function Dashboard() {
       <GrievanceModal
         isOpen={showGrievanceModal}
         onClose={() => setShowGrievanceModal(false)}
-        caseNumber={stats?.case_number}
+        caseNumber={stats?.case_id}
       />
     </div>
   );
@@ -150,8 +150,8 @@ function VictimDashboard({ stats, setShowGrievanceModal }) {
             </div>
             <div className="flex justify-between border-b pb-3">
               <span className="text-gray-600">Disbursement Status</span>
-              <span className={`font-bold px-2 py-1 rounded text-sm ${stats.status.is_verified ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'}`}>
-                {stats.status.is_verified ? 'Verified' : 'Pending'}
+              <span className={`font-bold px-2 py-1 rounded text-sm ${stats.status.is_disbursed? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'}`}>
+                {stats.status.is_disbursed ? 'Disbursed' : 'Pending'}
               </span>
             </div>
             <div className="flex justify-between">

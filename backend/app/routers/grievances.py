@@ -138,7 +138,7 @@ def list_grievances(
         ).all()
         officer_case_ids = [c[0] for c in officer_cases]
         
-        # Filter grievances
+        # Filter grievances 
         query = query.filter(Grievance.case_id.in_(officer_case_ids))
     
     if case_id:

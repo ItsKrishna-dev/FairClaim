@@ -47,8 +47,10 @@ def get_dashboard_stats(
 
 def get_victim_stats(user: User, db: Session):
     # 1. Get Victim's Case
-    case = db.query(Case).filter(Case.id == user.id).first()
-    
+    case = db.query(Case).filter(
+        (Case.victim_phone == user.phone) | (Case.victim_email == user.email)
+    ).first()
+
     if not case:
         return {
             "role": "victim",
@@ -68,13 +70,14 @@ def get_victim_stats(user: User, db: Session):
     
     # 4. Grievances
     active_grievances = db.query(Grievance).filter(
-        Grievance.id == user.id,
+        Grievance.case_id == case.id,
         Grievance.status.in_(["PENDING", "IN_PROGRESS"])
     ).count()
 
     return {
         "role": "victim",
         "has_case": True,
+        "case_id": case.id,
         "case_number": case.case_number,
         "overview": {
             "total_sanctioned": total_sanctioned,
