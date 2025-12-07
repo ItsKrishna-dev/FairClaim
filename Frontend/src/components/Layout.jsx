@@ -1,15 +1,22 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, FileCheck, LogOut } from 'lucide-react';
+import { LayoutDashboard, FileCheck, LogOut, Upload } from 'lucide-react';
+
 
 export default function Layout() {
   const { user, logout } = useAuth();
   const location = useLocation();
 
+  // ✅ Dynamic navigation based on user role
   const navItems = [
     { label: 'Dashboard', path: '/dashboard', icon: <LayoutDashboard size={20} /> },
-    { label: 'Verify Docs', path: '/verify', icon: <FileCheck size={20} /> },
+    { 
+      label: user?.role === 'victim' ? 'Upload Docs' : 'Verify Docs', 
+      path: '/verify', 
+      icon: user?.role === 'victim' ? <Upload size={20} /> : <FileCheck size={20} />
+    },
   ];
+
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -37,6 +44,7 @@ export default function Layout() {
           ))}
         </nav>
 
+
         <div className="p-4 border-t bg-gray-50">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 bg-gov-100 rounded-full flex items-center justify-center text-gov-600 font-bold">
@@ -55,6 +63,7 @@ export default function Layout() {
           </button>
         </div>
       </aside>
+
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto p-8">

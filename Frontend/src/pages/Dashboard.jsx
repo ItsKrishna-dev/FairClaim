@@ -5,11 +5,15 @@ import {
   Loader2, TrendingUp, AlertCircle, CheckCircle, IndianRupee, 
   FileText, Clock, ShieldCheck, Activity 
 } from 'lucide-react';
+import GrievanceModal from '../components/GrievanceModal';
+
 
 export default function Dashboard() {
   const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showGrievanceModal, setShowGrievanceModal] = useState(false);
+
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -25,6 +29,7 @@ export default function Dashboard() {
     fetchStats();
   }, []);
 
+
   if (loading) {
     return (
       <div className="flex h-96 items-center justify-center">
@@ -32,6 +37,7 @@ export default function Dashboard() {
       </div>
     );
   }
+
 
   return (
     <div className="space-y-8">
@@ -48,20 +54,29 @@ export default function Dashboard() {
         </p>
       </div>
 
+
       {/* Conditional Rendering based on Role */}
       {stats?.role === 'victim' ? (
-        <VictimDashboard stats={stats} />
+        <VictimDashboard stats={stats} setShowGrievanceModal={setShowGrievanceModal} />
       ) : (
         <OfficialDashboard stats={stats} />
       )}
+
+      {/* ✅ Grievance Modal - ADD THIS */}
+      <GrievanceModal
+        isOpen={showGrievanceModal}
+        onClose={() => setShowGrievanceModal(false)}
+        caseNumber={stats?.case_number}
+      />
     </div>
   );
 }
 
+
 /* -------------------------------------------------------------------------- */
 /*                             VICTIM DASHBOARD                               */
 /* -------------------------------------------------------------------------- */
-function VictimDashboard({ stats }) {
+function VictimDashboard({ stats, setShowGrievanceModal }) {
   if (!stats.has_case) {
     return (
       <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 flex items-center gap-4">
@@ -73,6 +88,7 @@ function VictimDashboard({ stats }) {
       </div>
     );
   }
+
 
   return (
     <div className="space-y-6">
@@ -101,6 +117,7 @@ function VictimDashboard({ stats }) {
         />
       </div>
 
+
       {/* 2. Progress Bar */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
         <div className="flex justify-between items-end mb-2">
@@ -115,6 +132,7 @@ function VictimDashboard({ stats }) {
         </div>
         <p className="text-xs text-gray-400 mt-2">Funds are released automatically at FIR, Chargesheet, and Conviction stages.</p>
       </div>
+
 
       {/* 3. Detailed Status Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -143,7 +161,8 @@ function VictimDashboard({ stats }) {
           </div>
         </div>
 
-        {/* Grievance Snapshot */}
+
+        {/* ✅ Grievance Snapshot - UPDATED SECTION */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
           <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
             <AlertCircle className="text-orange-500" size={20} /> My Grievances
@@ -151,7 +170,10 @@ function VictimDashboard({ stats }) {
           <div className="flex flex-col items-center justify-center h-32">
              <span className="text-4xl font-extrabold text-gray-800">{stats.grievances.active_count}</span>
              <span className="text-gray-500 text-sm mt-1">Active Issues</span>
-             <button className="mt-4 text-sm text-gov-600 font-medium hover:underline">
+             <button 
+               onClick={() => setShowGrievanceModal(true)}
+               className="mt-4 text-sm text-gov-600 font-medium hover:underline"
+             >
                File New Grievance &rarr;
              </button>
           </div>
@@ -160,6 +182,7 @@ function VictimDashboard({ stats }) {
     </div>
   );
 }
+
 
 /* -------------------------------------------------------------------------- */
 /*                            OFFICIAL DASHBOARD                              */
@@ -189,6 +212,7 @@ function OfficialDashboard({ stats }) {
         />
       </div>
 
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Case Status Breakdown */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
@@ -204,6 +228,7 @@ function OfficialDashboard({ stats }) {
             ))}
           </div>
         </div>
+
 
         {/* Fund Allocation Details */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
@@ -229,6 +254,7 @@ function OfficialDashboard({ stats }) {
     </div>
   );
 }
+
 
 /* -------------------------------------------------------------------------- */
 /*                             SHARED COMPONENTS                              */
