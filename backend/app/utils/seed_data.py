@@ -2,6 +2,7 @@
 Combined Database Seeding Script
 Seeds Users, Cases, and Grievances together.
 """
+
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import random
@@ -10,6 +11,7 @@ import random
 from app.database import SessionLocal, engine, Base
 from app.models import Case, Grievance, User
 from app.services import services
+
 
 def seed_users(db: Session):
     """Create dummy users in database if they don't exist"""
@@ -64,7 +66,6 @@ def seed_users(db: Session):
     ]
     
     success_count = 0
-    
     for user_data in users_data:
         try:
             # Check if user already exists
@@ -77,52 +78,85 @@ def seed_users(db: Session):
             services.create_user(db, **user_data)
             print(f"✅ Created: {user_data['email']} ({user_data['role']})")
             success_count += 1
-            
         except Exception as e:
             print(f"❌ Error creating {user_data['email']}: {str(e)}")
-
+    
     print(f"✅ Users processing complete. Added: {success_count}")
 
 
 def seed_cases(db: Session):
-    """Seed 10 dummy cases with random officer assignment"""
+    """Seed 3-4 cases PER dummy victim user (victim1, victim2, victim3 only)"""
     print("\n" + "=" * 60)
-    print("📦 Seeding Cases")
+    print("📦 Seeding Cases for Dummy Users Only")
     print("=" * 60)
     
     stages = ["FIR", "CHARGESHEET", "CONVICTION"]
     statuses = ["PENDING", "UNDER_REVIEW", "APPROVED", "REJECTED", "PAYMENT_PROCESSING", "COMPLETED"]
     officers = ["Sneha Reddy", "Vikram Singh"]
     
+    # ✅ Only dummy victim users get cases
+    dummy_victims = [
+        {
+            "name": "Rajesh Kumar",
+            "email": "victim1@fairclaim.com",
+            "phone": "+919876543210",
+            "aadhaar": "123456789012"
+        },
+        {
+            "name": "Priya Sharma",
+            "email": "victim2@fairclaim.com",
+            "phone": "+919876543211",
+            "aadhaar": "123456789013"
+        },
+        {
+            "name": "Amit Patel",
+            "email": "victim3@fairclaim.com",
+            "phone": "+919876543212",
+            "aadhaar": "123456789014"
+        }
+    ]
+    
     dummy_cases = []
-    for i in range(1, 11):
-        case = Case(
-            case_number=f"FC-2025120100{i:02d}",
-            victim_name=f"Victim Name {i}",
-            victim_aadhaar=f"12345678{i:04d}",
-            victim_phone=f"+9198765432{i:02d}",
-            victim_email=f"victim{i}@fairclaim.com",
-            incident_description=f"Case {i}: Detailed description of atrocity incident involving caste-based discrimination and violence.",
-            incident_date=datetime.now() - timedelta(days=random.randint(1, 365)),
-            incident_location=f"Village {i}, District {chr(65 + i % 5)}, State",
-            stage=random.choice(stages),
-            status=random.choice(statuses),
-            compensation_amount=random.choice([50000, 100000, 150000, 200000, 250000]),
-            bank_account_number=f"123456{i:010d}",
-            ifsc_code=f"SBIN000{i:04d}",
-            assigned_officer=random.choice(officers),
-            remarks=f"Case {i} under review" if i % 3 == 0 else None
-        )
-        dummy_cases.append(case)
+    case_counter = 1
+    
+    # ✅ Create 3-4 cases per dummy victim
+    for victim in dummy_victims:
+        num_cases = random.randint(3, 4)  # 3 or 4 cases per victim
+        
+        for i in range(num_cases):
+            case = Case(
+                case_number=f"FC-2025120100{case_counter:03d}",
+                victim_name=victim["name"],
+                victim_aadhaar=victim["aadhaar"],
+                victim_phone=victim["phone"],
+                victim_email=victim["email"],  # ✅ Linked to specific dummy user
+                incident_description=f"Case {case_counter}: Detailed description of atrocity incident involving caste-based discrimination and violence.",
+                incident_date=datetime.now() - timedelta(days=random.randint(1, 365)),
+                incident_location=f"Village {case_counter}, District {chr(65 + case_counter % 5)}, State",
+                stage=random.choice(stages),
+                status=random.choice(statuses),
+                compensation_amount=random.choice([50000, 100000, 150000, 200000, 250000]),
+                bank_account_number=f"123456{case_counter:010d}",
+                ifsc_code=f"SBIN000{case_counter:04d}",
+                assigned_officer=random.choice(officers),
+                remarks=f"Case {case_counter} under review" if case_counter % 3 == 0 else None
+            )
+            dummy_cases.append(case)
+            case_counter += 1
     
     db.add_all(dummy_cases)
     db.commit()
-    print(f"✅ Seeded {len(dummy_cases)} cases")
+    
+    print(f"✅ Seeded {len(dummy_cases)} cases across {len(dummy_victims)} dummy victims")
+    print(f"   - Rajesh Kumar (victim1@fairclaim.com): Cases linked")
+    print(f"   - Priya Sharma (victim2@fairclaim.com): Cases linked")
+    print(f"   - Amit Patel (victim3@fairclaim.com): Cases linked")
+    
     return dummy_cases
 
 
 def seed_grievances(db: Session, cases):
-    """Seed grievances linked to cases with escalation logic"""
+    """Seed grievances linked to dummy cases only"""
     print("\n" + "=" * 60)
     print("📝 Seeding Grievances")
     print("=" * 60)
@@ -139,21 +173,21 @@ def seed_grievances(db: Session, cases):
         ("Delayed chargesheet", "Chargesheet not filed even after 90 days of FIR", "legal delay"),
         ("No response from court", "Court hearing dates not communicated properly", "communication issue"),
     ]
-    grievance_status=["PENDING","OPEN","RESOLVED"]
+    
+    grievance_status = ["PENDING", "OPEN", "RESOLVED"]
     dummy_grievances = []
+    
     for i, case in enumerate(cases):
         if i < len(grievance_templates):
             title, desc, category = grievance_templates[i]
             
-            # Determine escalation: is_escalated = True if unresolved and created > 10 days ago
-            creation_days_ago = random.randint(1, 20)  # Some < 10 days, some > 10 days
+            # Determine escalation
+            creation_days_ago = random.randint(1, 20)
             created_at = datetime.utcnow() - timedelta(days=creation_days_ago)
             
-            # Check if resolved
-            is_resolved = (i % 4 == 0)  # Some are marked as resolved
+            is_resolved = (i % 4 == 0)
             resolved_at = datetime.utcnow() - timedelta(days=random.randint(1, 10)) if is_resolved else None
             
-            # Escalate if: NOT resolved AND created > 10 days ago
             is_escalated = (not is_resolved) and (creation_days_ago > 10)
             
             grievance = Grievance(
@@ -162,7 +196,7 @@ def seed_grievances(db: Session, cases):
                 title=title,
                 description=desc,
                 category=category,
-                priority="MEDIUM",  # Will be auto-classified in real API
+                priority="MEDIUM",
                 status=random.choice(grievance_status),
                 contact_name=case.victim_name,
                 contact_phone=case.victim_phone,
@@ -176,6 +210,7 @@ def seed_grievances(db: Session, cases):
     
     db.add_all(dummy_grievances)
     db.commit()
+    
     print(f"✅ Seeded {len(dummy_grievances)} grievances")
 
 
@@ -190,35 +225,51 @@ def seed_all():
     db = SessionLocal()
     
     try:
-        # 3. Seed Users (We do this first, and we don't delete existing users to preserve logins)
+        # 3. Seed Users
         seed_users(db)
-
-        # 4. Clear existing Cases/Grievances to prevent duplicates on re-runs
-        print("\n🧹 Cleaning old Case and Grievance data...")
-        db.query(Grievance).delete()
-        db.query(Case).delete()
+        
+        # 4. ✅ Clear ONLY existing dummy Cases/Grievances linked to dummy users
+        print("\n🧹 Cleaning old dummy Case and Grievance data...")
+        
+        # Delete only cases belonging to dummy users
+        dummy_emails = ["victim1@fairclaim.com", "victim2@fairclaim.com", "victim3@fairclaim.com"]
+        
+        # Get dummy case IDs
+        dummy_case_ids = db.query(Case.id).filter(Case.victim_email.in_(dummy_emails)).all()
+        dummy_case_ids = [c[0] for c in dummy_case_ids]
+        
+        # Delete grievances linked to dummy cases
+        if dummy_case_ids:
+            db.query(Grievance).filter(Grievance.case_id.in_(dummy_case_ids)).delete(synchronize_session=False)
+        
+        # Delete dummy cases
+        db.query(Case).filter(Case.victim_email.in_(dummy_emails)).delete(synchronize_session=False)
         db.commit()
         
-        # 5. Seed Cases
+        print("✅ Cleaned dummy data only (real user data preserved)")
+        
+        # 5. Seed Cases (only for dummy users)
         cases = seed_cases(db)
         
-        # 6. Seed Grievances (linked to the cases we just created)
+        # 6. Seed Grievances
         seed_grievances(db, cases)
         
         print("\n" + "=" * 60)
         print("🎉 Database seeding completed successfully!")
         print("=" * 60)
-
+        
         # Print login credentials reminder
-        print("\n📝 Test Credentials:")
+        print("\n📝 Test Credentials (Dummy Users with Cases):")
         print("-" * 60)
-        print("Victims:")
+        print("Victims (with 3-4 dummy cases each):")
         print("  Email: victim1@fairclaim.com | Password: victim123")
         print("  Email: victim2@fairclaim.com | Password: victim123")
+        print("  Email: victim3@fairclaim.com | Password: victim123")
         print("\nOfficials:")
         print("  Email: official1@fairclaim.com | Password: official123")
+        print("\n⚠️  New users will have ZERO cases until they create their own!")
         print("-" * 60 + "\n")
-
+        
     except Exception as e:
         db.rollback()
         print(f"\n❌ Error seeding database: {str(e)}\n")
