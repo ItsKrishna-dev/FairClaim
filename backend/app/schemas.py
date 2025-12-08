@@ -24,9 +24,11 @@ class CaseBase(BaseModel):
     victim_aadhaar: str = Field(..., pattern=r"^\d{12}$")
     victim_phone: str = Field(..., min_length=10, max_length=15)
     victim_email: Optional[str] = None
+    
     incident_description: str = Field(..., min_length=10)
     incident_date: datetime
     incident_location: str = Field(..., min_length=5)
+    
     stage: CaseStage
     compensation_amount: float = Field(..., gt=0)
     bank_account_number: str = Field(..., min_length=9, max_length=18)
@@ -34,18 +36,9 @@ class CaseBase(BaseModel):
     
     @validator('incident_date')
     def validate_incident_date(cls, v):
-        """Validate that incident date is not in the future"""
-        from datetime import date
-        
-        # ✅ Extract date and compare (avoids timezone issues)
-        incident_date = v.date() if hasattr(v, 'date') else v
-        today = date.today()
-        
-        if incident_date > today:
+        if v > datetime.now():
             raise ValueError('Incident date cannot be in the future')
-        
         return v
-
 
 class CaseCreate(CaseBase):
     pass
