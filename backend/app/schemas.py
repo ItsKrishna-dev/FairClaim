@@ -1,9 +1,14 @@
-from pydantic import BaseModel, Field, validator , EmailStr ,field_validator
-from datetime import date, datetime
-from typing import Optional, List , Literal
+from pydantic import BaseModel, Field, validator, EmailStr, field_validator
+from datetime import datetime, date
+from typing import Optional, List, Literal
 from enum import Enum
 
-from typing import Optional, Literal
+# ============= ACT TYPE ENUM =============
+class ActType(str, Enum):
+    """Types of Acts under which compensation is claimed"""
+    PCR_ACT_1955 = "PCR Act 1955"
+    POA_ACT_2015 = "PoA Act 2015"
+
 
 # ============= CASE SCHEMAS =============
 class CaseStatus(str, Enum):
@@ -14,97 +19,87 @@ class CaseStatus(str, Enum):
     PAYMENT_PROCESSING = "PAYMENT_PROCESSING"
     COMPLETED = "COMPLETED"
 
+
 class CaseStage(str, Enum):
     FIR = "FIR"
     CHARGESHEET = "CHARGESHEET"
     CONVICTION = "CONVICTION"
 
 
-# ============= ACT TYPE ENUM =============
-class ActType(str, Enum):
-    """Types of Acts under which compensation is claimed"""
-    PCR_ACT_1955 = "PCR Act 1955"
-    POA_ACT_2015 = "PoA Act 2015"
-
-
-# ============= VICTIM CASE REGISTRATION (10 FIELDS ONLY) =============
+# ✅ VICTIM CASE REGISTRATION
 class VictimCaseCreate(BaseModel):
-    """
-    Victim case registration with ONLY these fields:
-    1. Full Name, 2. Aadhaar Number, 3. FIR Number, 4. Act Type,
-    5. Bank Name, 6. Account Number, 7. IFSC Code,
-    8. Incident Location, 9. Incident Date, 10. Incident Description
+    """Victim case registration - 10 fields"""
     
-    Compensation is auto-calculated based on Act Type.
-    """
-    
-    # 1. Full Name
-    victim_name: str = Field(..., min_length=2, max_length=100, description="Full Name")
-    
-    # 2. Aadhaar Number
-    victim_aadhaar: str = Field(..., pattern=r"^\d{12}$", description="12-digit Aadhaar Number")
-    
-    # 3. FIR Number
-    fir_number: str = Field(..., min_length=5, max_length=50, description="FIR Number (e.g., FIR/2025/10034)")
-    
-    # 4. Act Type
-    act_type: ActType = Field(..., description="Type of Act: PCR Act 1955 or PoA Act 2015")
-    
-    # 5. Bank Name
-    bank_name: str = Field(..., min_length=2, max_length=100, description="Bank Name")
-    
-    # 6. Account Number
-    bank_account_number: str = Field(..., min_length=9, max_length=18, description="Bank Account Number")
-    
-    # 7. IFSC Code
-    ifsc_code: str = Field(..., min_length=11, max_length=11, description="IFSC Code")
-    
-    # 8. Incident Location
-    incident_location: str = Field(..., min_length=5, description="Incident Location")
-    
-    # 9. Incident Date
-    incident_date: date = Field(..., description="Incident Date (YYYY-MM-DD)")
-    
-    # 10. Incident Description
-    incident_description: str = Field(..., min_length=10, description="Incident Description")
+    victim_name: str = Field(..., min_length=2, max_length=100)
+    victim_aadhaar: str = Field(..., pattern=r"^\d{12}$")
+    fir_number: str = Field(..., min_length=5, max_length=50)
+    act_type: ActType = Field(...)
+    incident_description: str = Field(..., min_length=10)
+    incident_date: str  # Accept string "YYYY-MM-DD"
+    incident_location: str = Field(..., min_length=5)
+    bank_name: str = Field(..., min_length=2, max_length=100)
+    bank_account_number: str = Field(..., min_length=9, max_length=18)
+    ifsc_code: str = Field(..., min_length=11, max_length=11)
     
     @validator('incident_date')
     def validate_incident_date(cls, v):
-        """Validate that incident date is not in the future"""
-        from datetime import date as dt_date
-        today = dt_date.today()
+        """Parse and validate incident date"""
+        from datetime import datetime as dt
         
-        if v > today:
-            raise ValueError('Incident date cannot be in the future')
-        
-        return v
+        try:
+            parsed_date = dt.strptime(v, "%Y-%m-%d").date()
+            
+            if parsed_date > dt.now().date():
+                raise ValueError('Incident date cannot be in the future')
+            
+            return v
+            
+        except ValueError as e:
+            if "does not match format" in str(e):
+                raise ValueError('Date must be in YYYY-MM-DD format')
+            raise
 
-# ============= UPDATE EXISTING CaseBase =============
+
+# ✅ BASE CASE SCHEMA
 class CaseBase(BaseModel):
     victim_name: str = Field(..., min_length=2, max_length=100)
     victim_aadhaar: str = Field(..., pattern=r"^\d{12}$")
     victim_phone: str = Field(..., min_length=10, max_length=15)
     victim_email: Optional[str] = None
     incident_description: str = Field(..., min_length=10)
-    incident_date: date  # ✅ Changed to date
+    incident_date: datetime  # ✅ Keep as datetime for database compatibility
     incident_location: str = Field(..., min_length=5)
     stage: CaseStage
     compensation_amount: float = Field(..., gt=0)
     bank_account_number: str = Field(..., min_length=9, max_length=18)
     ifsc_code: str = Field(..., min_length=11, max_length=11)
-    fir_number: Optional[str] = None  # ✅ Added
-    act_type: Optional[str] = None  # ✅ Added
-    bank_name: Optional[str] = None  # ✅ Added
+    fir_number: Optional[str] = None
+    act_type: Optional[str] = None
+    bank_name: Optional[str] = None
+    
+    @validator('incident_date', pre=True)
+    def parse_incident_date(cls, v):
+        """Handle both datetime and date objects"""
+        if isinstance(v, str):
+            # Parse string to datetime
+            return datetime.strptime(v, "%Y-%m-%d")
+        elif isinstance(v, date) and not isinstance(v, datetime):
+            # Convert date to datetime
+            return datetime.combine(v, datetime.min.time())
+        return v
 
 
 class CaseCreate(CaseBase):
     pass
+
 
 class CaseUpdate(BaseModel):
     status: Optional[CaseStatus] = None
     assigned_officer: Optional[str] = None
     remarks: Optional[str] = None
 
+
+# ✅ CASE RESPONSE - SERIALIZES PROPERLY
 class CaseResponse(CaseBase):
     id: int
     case_number: str
@@ -117,12 +112,17 @@ class CaseResponse(CaseBase):
     
     class Config:
         from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if v else None
+        }
+
 
 class CaseListResponse(BaseModel):
     cases: List[CaseResponse]
     total: int
     page: int
     page_size: int
+
 
 # ============= GRIEVANCE SCHEMAS =============
 class GrievanceStatus(str, Enum):
@@ -132,11 +132,13 @@ class GrievanceStatus(str, Enum):
     CLOSED = "CLOSED"
     ESCALATED = "ESCALATED"
 
+
 class GrievancePriority(str, Enum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
     CRITICAL = "CRITICAL"
+
 
 class GrievanceBase(BaseModel):
     case_id: int
@@ -148,13 +150,16 @@ class GrievanceBase(BaseModel):
     contact_email: Optional[str] = None
     is_escalated: bool = False
 
+
 class GrievanceCreate(GrievanceBase):
     pass
+
 
 class GrievanceUpdate(BaseModel):
     status: Optional[GrievanceStatus] = None
     resolution_notes: Optional[str] = None
     resolved_by: Optional[str] = None
+
 
 class GrievanceResponse(GrievanceBase):
     id: int
@@ -170,14 +175,15 @@ class GrievanceResponse(GrievanceBase):
     class Config:
         from_attributes = True
 
+
 class GrievanceListResponse(BaseModel):
     grievances: List[GrievanceResponse]
     total: int
     page: int
     page_size: int
 
-# ==================== ENUMS FOR SCHEMAS ====================
 
+# ==================== ENUMS FOR SCHEMAS ====================
 class UserRoleEnum(str, Enum):
     """User role types for API"""
     VICTIM = "victim"
@@ -207,39 +213,41 @@ class GrievanceStatusEnum(str, Enum):
 
 
 # ==================== USER SCHEMAS ====================
-
 class UserBase(BaseModel):
     """Base user schema with common fields"""
     email: EmailStr
     full_name: str = Field(..., min_length=2, max_length=255)
-    phone: Optional[str] = Field(None, pattern=r'^\+?[1-9]\d{9,14}$')
+    phone: Optional[str] = Field(None, pattern=r'^\\+?[1-9]\\d{9,14}$')
     role: UserRoleEnum
+
 
 class UserRole(str, Enum):
     ADMIN = "admin"
     OFFICER = "officer"
     VICTIM = "victim"
+
+
 class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(
-        ..., 
-        min_length=6, 
-        max_length=72,  # ✅ bcrypt limit
+        ...,
+        min_length=6,
+        max_length=72,
         description="Password: 6-72 characters"
     )
     full_name: str
     role: Literal["admin", "officer", "victim","Victim","Admin","Officer"]
-    phone: Optional[str] = Field(None, pattern=r'^\+?[1-9]\d{9,14}$')
-    aadhaar_number: Optional[str] = Field(None, pattern=r'^\d{12}$')
+    phone: Optional[str] = Field(None, pattern=r'^\\+?[1-9]\\d{9,14}$')
+    aadhaar_number: Optional[str] = Field(None, pattern=r'^\\d{12}$')
     address: Optional[str] = None
     
-    @field_validator('password')
-    @classmethod
-    def validate_password_length(cls, v):
-        """Ensure password is within bcrypt limits"""
-        if len(v) > 100:
-            raise ValueError('Password cannot be longer than 72 characters')
-        return v
+    # @field_validator('password')
+    # @classmethod
+    # def validate_password_length(cls, v):
+    #     """Ensure password is within bcrypt limits"""
+    #     if len(v) > 100:
+    #         raise ValueError('Password cannot be longer than 72 characters')
+    #     return v
 
 
 class UserLogin(BaseModel):
@@ -262,18 +270,17 @@ class UserResponse(BaseModel):
     created_at: datetime
     
     class Config:
-        from_attributes = True  # For SQLAlchemy ORM compatibility
+        from_attributes = True
 
 
 class UserUpdate(BaseModel):
     """Schema for updating user information"""
     full_name: Optional[str] = Field(None, min_length=2, max_length=255)
-    phone: Optional[str] = Field(None, pattern=r'^\+?[1-9]\d{9,14}$')
+    phone: Optional[str] = Field(None, pattern=r'^\\+?[1-9]\\d{9,14}$')
     address: Optional[str] = None
 
 
 # ==================== TOKEN SCHEMAS ====================
-
 class Token(BaseModel):
     """Schema for JWT token response"""
     access_token: str
@@ -283,11 +290,11 @@ class Token(BaseModel):
 
 class TokenPayload(BaseModel):
     """Schema for JWT token payload"""
-    sub: Optional[int] = None  # User ID
-    exp: Optional[int] = None  # Expiration time
+    sub: Optional[int] = None
+    exp: Optional[int] = None
+
 
 # ==================== DOCUMENT VERIFICATION SCHEMAS ====================
-
 class DocumentVerificationResponse(BaseModel):
     """Schema for document verification result"""
     filename: str
@@ -302,7 +309,6 @@ class DocumentVerificationResponse(BaseModel):
 
 
 # ==================== DASHBOARD SCHEMAS ====================
-
 class FundStatistics(BaseModel):
     """Schema for fund statistics"""
     total_allocated: float
@@ -330,10 +336,9 @@ class DashboardStats(BaseModel):
 
 
 # ==================== NOTIFICATION SCHEMAS ====================
-
 class SMSNotification(BaseModel):
     """Schema for SMS notification"""
-    phone: str = Field(..., pattern=r'^\+?[1-9]\d{9,14}$')
+    phone: str = Field(..., pattern=r'^\\+?[1-9]\\d{9,14}$')
     message: str = Field(..., min_length=1, max_length=160)
 
 
@@ -346,10 +351,8 @@ class NotificationResponse(BaseModel):
 
 
 # ==================== ERROR SCHEMAS ====================
-
 class ErrorResponse(BaseModel):
     """Schema for error responses"""
     detail: str
     error_code: Optional[str] = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-

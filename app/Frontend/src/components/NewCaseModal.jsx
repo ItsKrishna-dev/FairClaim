@@ -1,27 +1,22 @@
 import { useState } from 'react';
-import { X, Info } from 'lucide-react';
+import { X, Info, FileText } from 'lucide-react';
 import api from '../services/api';
 import toast from 'react-hot-toast';
 
 export default function NewCaseModal({ isOpen, onClose, onSuccess, user }) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    // Visual Fields (from Image)
+    // Visual Fields
     victim_name: user?.full_name || '',
     victim_aadhaar: user?.aadhaar_number || '',
-    fir_input: '', // Used for description since backend auto-generates Case Number
-    act_type: '',  // Used for description
-    bank_name: '', // Not in DB, will append to notes
+    fir_number: '', 
+    act_type: '',  
+    bank_name: '', 
     bank_account_number: '',
     ifsc_code: '',
-
-    // Backend Required Fields (Hidden/Auto-filled or Added)
-    victim_phone: user?.phone || '',
-    victim_email: user?.email || '',
-    incident_date: new Date().toISOString().split('T')[0], // Default today
     incident_location: '',
-    compensation_amount: 0, // Default
-    stage: 'fir_stage'
+    incident_date: new Date().toISOString().split('T')[0], // Default today (YYYY-MM-DD)
+    incident_description: '' // ✅ Added New Field
   });
 
   if (!isOpen) return null;
@@ -35,39 +30,30 @@ export default function NewCaseModal({ isOpen, onClose, onSuccess, user }) {
     e.preventDefault();
     setLoading(true);
 
-    // 1. Construct the Payload to match cases.py -> CaseCreate schema
-    // We combine visual fields into the required backend fields
+    // 1. Construct the Payload strictly matching 'VictimCaseCreate' schema
     const payload = {
       victim_name: formData.victim_name,
       victim_aadhaar: formData.victim_aadhaar,
-      victim_phone: formData.victim_phone || "0000000000",
-      victim_email: formData.victim_email || "noemail@provided.com",
-      
-      // Combine FIR/Act info into description because create_case doesn't accept fir_number directly
-      incident_description: `FIR: ${formData.fir_input} | Act: ${formData.act_type} | Bank: ${formData.bank_name}`,
-      
-      incident_date: new Date(formData.incident_date).toISOString(),
-      incident_location: formData.incident_location || "Not Specified",
-      stage: formData.stage,
-      compensation_amount: parseFloat(formData.compensation_amount),
+      fir_number: formData.fir_number,
+      act_type: formData.act_type, // Must be "PCR Act 1955" or "PoA Act 2015"
+      bank_name: formData.bank_name,
       bank_account_number: formData.bank_account_number,
-      ifsc_code: formData.ifsc_code
+      ifsc_code: formData.ifsc_code,
+      incident_location: formData.incident_location,
+      incident_date: formData.incident_date,
+      incident_description: formData.incident_description
     };
 
     try {
-      await api.post('/cases/', payload);
+      // ✅ Updated Endpoint: /cases/victim/register
+      await api.post('/cases/victim/register', payload);
       toast.success('Case Registered Successfully');
       onSuccess(); // Refresh the dashboard list
       onClose();   // Close modal
     } catch (error) {
       console.error(error);
       const msg = error.response?.data?.detail || "Failed to register case";
-      
-      if(error.response?.status === 403) {
-        toast.error("Permission Denied: Only Officials can register cases.");
-      } else {
-        toast.error(msg);
-      }
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -93,7 +79,7 @@ export default function NewCaseModal({ isOpen, onClose, onSuccess, user }) {
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           
-          {/* Row 1 */}
+          {/* Row 1: Personal Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-1">
               <label className="text-sm font-semibold text-gray-700">Full Name *</label>
@@ -113,22 +99,24 @@ export default function NewCaseModal({ isOpen, onClose, onSuccess, user }) {
                 value={formData.victim_aadhaar}
                 onChange={handleChange}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                placeholder="1234-5678-9012"
+                placeholder="12-digit Aadhaar"
+                pattern="\d{12}"
+                title="Aadhaar must be 12 digits"
                 required
               />
             </div>
           </div>
 
-          {/* Row 2 */}
+          {/* Row 2: Case Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-1">
               <label className="text-sm font-semibold text-gray-700">FIR Number *</label>
               <input 
-                name="fir_input"
-                value={formData.fir_input}
+                name="fir_number"
+                value={formData.fir_number}
                 onChange={handleChange}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                placeholder=" For eg. FIR/2025/001234"
+                placeholder="e.g. FIR/2025/001234"
                 required
               />
             </div>
@@ -142,13 +130,13 @@ export default function NewCaseModal({ isOpen, onClose, onSuccess, user }) {
                 required
               >
                 <option value="">Select applicable act</option>
-                <option value="PCR Act">PCR Act 1955</option>
-                <option value="PoA Act">PoA Act 1989</option>
+                <option value="PCR Act 1955">PCR Act 1955</option>
+                <option value="PoA Act 2015">PoA Act 2015</option>
               </select>
             </div>
           </div>
 
-          {/* Row 3 - Bank Info */}
+          {/* Row 3: Bank Info */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-1">
               <label className="text-sm font-semibold text-gray-700">Bank Name *</label>
@@ -157,7 +145,7 @@ export default function NewCaseModal({ isOpen, onClose, onSuccess, user }) {
                 value={formData.bank_name}
                 onChange={handleChange}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                placeholder="Bank Name"
+                placeholder="e.g. State Bank of India"
                 required
               />
             </div>
@@ -168,27 +156,26 @@ export default function NewCaseModal({ isOpen, onClose, onSuccess, user }) {
                 value={formData.bank_account_number}
                 onChange={handleChange}
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                placeholder="Enter Acc No."
+                placeholder="Account Number"
                 required
               />
             </div>
           </div>
 
-          {/* Row 4 - IFSC */}
-          <div className="space-y-1">
-              <label className="text-sm font-semibold text-gray-700">IFSC Code *</label>
-              <input 
-                name="ifsc_code"
-                value={formData.ifsc_code}
-                onChange={handleChange}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                placeholder="Enter IFSC Code"
-                required
-              />
-          </div>
-
-          {/* Extra Fields required by Backend but not in Image (Collapsible or just added) */}
-          <div className="pt-4 border-t border-gray-100 grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Row 4: IFSC & Location */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1">
+                <label className="text-sm font-semibold text-gray-700">IFSC Code *</label>
+                <input 
+                  name="ifsc_code"
+                  value={formData.ifsc_code}
+                  onChange={handleChange}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
+                  placeholder="e.g. SBIN0001234"
+                  maxLength={11}
+                  required
+                />
+            </div>
              <div className="space-y-1">
                 <label className="text-sm font-semibold text-gray-700">Incident Location *</label>
                 <input 
@@ -200,6 +187,10 @@ export default function NewCaseModal({ isOpen, onClose, onSuccess, user }) {
                     required 
                 />
              </div>
+          </div>
+
+          {/* Row 5: Date & Description */}
+          <div className="space-y-4">
              <div className="space-y-1">
                 <label className="text-sm font-semibold text-gray-700">Incident Date *</label>
                 <input 
@@ -211,6 +202,22 @@ export default function NewCaseModal({ isOpen, onClose, onSuccess, user }) {
                     required 
                 />
              </div>
+             
+             {/* ✅ NEW: Incident Description Field */}
+             <div className="space-y-1">
+                <label className="text-sm font-semibold text-gray-700 flex items-center gap-1">
+                  <FileText size={16} /> Incident Description *
+                </label>
+                <textarea 
+                    name="incident_description" 
+                    value={formData.incident_description} 
+                    onChange={handleChange} 
+                    placeholder="Please describe the incident in detail..."
+                    className="w-full p-3 border border-gray-300 rounded-lg outline-none min-h-[100px]" 
+                    required 
+                    minLength={10}
+                />
+             </div>
           </div>
 
           {/* Info Box */}
@@ -219,9 +226,8 @@ export default function NewCaseModal({ isOpen, onClose, onSuccess, user }) {
             <div>
               <h4 className="text-blue-700 font-semibold text-sm mb-1">Important Information</h4>
               <p className="text-blue-600/80 text-xs leading-relaxed">
-                After registering your case, you will need to submit supporting documents including FIR copy, 
-                medical reports (if applicable), income certificate, and identity proof. Your case will be 
-                reviewed by the concerned authorities within 15-30 days.
+                Compensation amount will be automatically calculated based on the Act Type selected. 
+                Your case will be reviewed by the concerned authorities within 15-30 days.
               </p>
             </div>
           </div>

@@ -42,16 +42,8 @@ def register_victim_case(
     current_user: User = Depends(get_current_user)
 ):
     """
-    ✅ FOR VICTIMS ONLY - Simplified case registration with auto-compensation.
-    
-    Required fields (10 total):
-    1. Full Name, 2. Aadhaar Number, 3. FIR Number, 4. Act Type,
-    5. Bank Name, 6. Account Number, 7. IFSC Code,
-    8. Incident Location, 9. Incident Date, 10. Incident Description
-    
-    Compensation is AUTO-CALCULATED based on Act Type:
-    - PCR Act 1955: ₹50,000 (FIR stage)
-    - PoA Act 2015: ₹75,000 (FIR stage)
+    Register a new case (VICTIMS ONLY).
+    Compensation is AUTO-CALCULATED based on Act Type.
     """
     
     user_role = get_user_role(current_user)
@@ -59,24 +51,39 @@ def register_victim_case(
     if user_role != "victim":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only victims can use this endpoint. Officials should use POST /cases/"
+            detail="Only victims can register new cases"
         )
     
     try:
+        from datetime import datetime, date
+        
         # ✅ AUTO-CALCULATE COMPENSATION
         compensation = calculate_compensation(
             act_type=case_data.act_type.value,
             stage="FIR"
         )
         
-        # Convert date to datetime (for database storage)
-        incident_datetime = datetime.combine(case_data.incident_date, datetime.min.time())
+        # ✅ PARSE DATE PROPERLY
+        incident_date = case_data.incident_date
         
-        # ✅ Get phone and email from logged-in user
+        if isinstance(incident_date, str):
+            # Parse string "2025-12-08" to date object
+            incident_date_obj = datetime.strptime(incident_date, "%Y-%m-%d").date()
+        elif isinstance(incident_date, date):
+            # Already a date object
+            incident_date_obj = incident_date
+        else:
+            # Fallback
+            incident_date_obj = datetime.now().date()
+        
+        # Convert date to datetime for database
+        incident_datetime = datetime.combine(incident_date_obj, datetime.min.time())
+        
+        # Get phone and email from logged-in user
         victim_phone = current_user.phone or "0000000000"
         victim_email = current_user.email
         
-        # Create case with auto-calculated compensation
+        # Create case
         db_case = Case(
             case_number=generate_case_number(),
             victim_name=case_data.victim_name,
@@ -89,9 +96,9 @@ def register_victim_case(
             incident_description=case_data.incident_description,
             incident_date=incident_datetime,
             incident_location=case_data.incident_location,
-            stage="FIR",  # New cases always start at FIR
+            stage="FIR",
             status="PENDING",
-            compensation_amount=compensation,  # ✅ AUTO-CALCULATED
+            compensation_amount=compensation,
             bank_account_number=case_data.bank_account_number,
             ifsc_code=case_data.ifsc_code,
             created_by_user_id=current_user.id
@@ -105,6 +112,12 @@ def register_victim_case(
         
         return db_case
         
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid date format: {str(e)}"
+        )
     except Exception as e:
         db.rollback()
         print(f"❌ Error registering case: {str(e)}")
