@@ -171,7 +171,7 @@ class UserCreate(BaseModel):
         description="Password: 6-72 characters"
     )
     full_name: str
-    role: Literal["admin", "officer", "victim"]
+    role: Literal["admin", "officer", "victim","Victim","Admin","Officer"]
     phone: Optional[str] = Field(None, pattern=r'^\+?[1-9]\d{9,14}$')
     aadhaar_number: Optional[str] = Field(None, pattern=r'^\d{12}$')
     address: Optional[str] = None
@@ -180,7 +180,7 @@ class UserCreate(BaseModel):
     @classmethod
     def validate_password_length(cls, v):
         """Ensure password is within bcrypt limits"""
-        if len(v) > 72:
+        if len(v) > 100:
             raise ValueError('Password cannot be longer than 72 characters')
         return v
 

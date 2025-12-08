@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, FileCheck, LogOut } from 'lucide-react';
+import { LayoutDashboard, FileCheck, LogOut, Upload } from 'lucide-react';
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -8,7 +8,11 @@ export default function Layout() {
 
   const navItems = [
     { label: 'Dashboard', path: '/dashboard', icon: <LayoutDashboard size={20} /> },
-    { label: 'Verify Docs', path: '/verify', icon: <FileCheck size={20} /> },
+    { 
+      label: user?.role === 'victim' ? 'Upload Docs' : 'Verify Docs', 
+      path: '/verify', 
+      icon: user?.role === 'victim' ? <Upload size={20} /> : <FileCheck size={20} />
+    },
   ];
 
   return (
