@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, validator , EmailStr ,field_validator
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional, List , Literal
 from enum import Enum
 
@@ -19,26 +19,83 @@ class CaseStage(str, Enum):
     CHARGESHEET = "CHARGESHEET"
     CONVICTION = "CONVICTION"
 
+
+# ============= ACT TYPE ENUM =============
+class ActType(str, Enum):
+    """Types of Acts under which compensation is claimed"""
+    PCR_ACT_1955 = "PCR Act 1955"
+    POA_ACT_2015 = "PoA Act 2015"
+
+
+# ============= VICTIM CASE REGISTRATION (10 FIELDS ONLY) =============
+class VictimCaseCreate(BaseModel):
+    """
+    Victim case registration with ONLY these fields:
+    1. Full Name, 2. Aadhaar Number, 3. FIR Number, 4. Act Type,
+    5. Bank Name, 6. Account Number, 7. IFSC Code,
+    8. Incident Location, 9. Incident Date, 10. Incident Description
+    
+    Compensation is auto-calculated based on Act Type.
+    """
+    
+    # 1. Full Name
+    victim_name: str = Field(..., min_length=2, max_length=100, description="Full Name")
+    
+    # 2. Aadhaar Number
+    victim_aadhaar: str = Field(..., pattern=r"^\d{12}$", description="12-digit Aadhaar Number")
+    
+    # 3. FIR Number
+    fir_number: str = Field(..., min_length=5, max_length=50, description="FIR Number (e.g., FIR/2025/10034)")
+    
+    # 4. Act Type
+    act_type: ActType = Field(..., description="Type of Act: PCR Act 1955 or PoA Act 2015")
+    
+    # 5. Bank Name
+    bank_name: str = Field(..., min_length=2, max_length=100, description="Bank Name")
+    
+    # 6. Account Number
+    bank_account_number: str = Field(..., min_length=9, max_length=18, description="Bank Account Number")
+    
+    # 7. IFSC Code
+    ifsc_code: str = Field(..., min_length=11, max_length=11, description="IFSC Code")
+    
+    # 8. Incident Location
+    incident_location: str = Field(..., min_length=5, description="Incident Location")
+    
+    # 9. Incident Date
+    incident_date: date = Field(..., description="Incident Date (YYYY-MM-DD)")
+    
+    # 10. Incident Description
+    incident_description: str = Field(..., min_length=10, description="Incident Description")
+    
+    @validator('incident_date')
+    def validate_incident_date(cls, v):
+        """Validate that incident date is not in the future"""
+        from datetime import date as dt_date
+        today = dt_date.today()
+        
+        if v > today:
+            raise ValueError('Incident date cannot be in the future')
+        
+        return v
+
+# ============= UPDATE EXISTING CaseBase =============
 class CaseBase(BaseModel):
     victim_name: str = Field(..., min_length=2, max_length=100)
     victim_aadhaar: str = Field(..., pattern=r"^\d{12}$")
     victim_phone: str = Field(..., min_length=10, max_length=15)
     victim_email: Optional[str] = None
-    
     incident_description: str = Field(..., min_length=10)
-    incident_date: datetime
+    incident_date: date  # ✅ Changed to date
     incident_location: str = Field(..., min_length=5)
-    
     stage: CaseStage
     compensation_amount: float = Field(..., gt=0)
     bank_account_number: str = Field(..., min_length=9, max_length=18)
     ifsc_code: str = Field(..., min_length=11, max_length=11)
-    
-    @validator('incident_date')
-    def validate_incident_date(cls, v):
-        if v > datetime.now():
-            raise ValueError('Incident date cannot be in the future')
-        return v
+    fir_number: Optional[str] = None  # ✅ Added
+    act_type: Optional[str] = None  # ✅ Added
+    bank_name: Optional[str] = None  # ✅ Added
+
 
 class CaseCreate(CaseBase):
     pass

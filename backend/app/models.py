@@ -47,21 +47,27 @@ class Case(Base):
     victim_phone = Column(String(15), nullable=False)
     victim_email = Column(String(100), nullable=True)
     
-    # Incident Details 
+    # Incident Details
     incident_description = Column(Text, nullable=False)
     incident_date = Column(DateTime, nullable=False)
     incident_location = Column(String(255), nullable=False)
     
+    # ✅ NEW FIELDS
+    fir_number = Column(String(50), nullable=True, index=True)
+    act_type = Column(String(50), nullable=True)
+    bank_name = Column(String(100), nullable=True)  # ✅ Added
+    
     # DBT Details
-    stage = Column(String(20), nullable=False)  # Using String for SQLite compatibility
+    stage = Column(String(20), nullable=False)
     status = Column(String(20), default="PENDING", nullable=False)
     compensation_amount = Column(Float, nullable=False)
     bank_account_number = Column(String(20), nullable=False)
     ifsc_code = Column(String(11), nullable=False)
     
     # File Uploads
-    uploaded_documents = Column(Text, nullable=True)  # JSON string\
-    # 🔗 ADD THESE - Link to User
+    uploaded_documents = Column(Text, nullable=True)
+    
+    # User links
     created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     assigned_officer_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     
@@ -75,8 +81,6 @@ class Case(Base):
     grievances = relationship("Grievance", back_populates="case", cascade="all, delete-orphan")
     creator = relationship("User", back_populates="created_cases", foreign_keys=[created_by_user_id])
     assigned_officer_user = relationship("User", back_populates="assigned_cases", foreign_keys=[assigned_officer_user_id])
-    def __repr__(self):
-        return f"<Case(id={self.id}, fir='{self.fir_number}', status='{self.status.value}')>"
 
 # Grievance Model
 class Grievance(Base):

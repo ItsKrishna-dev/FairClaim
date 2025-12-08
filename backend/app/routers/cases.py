@@ -2,17 +2,25 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import json
-from datetime import datetime
+from datetime import datetime, date
 
 from app.routers.auth import get_current_user
 from app.database import get_db
 from app.models import Case, User
-from app.schemas import CaseCreate, CaseUpdate, CaseResponse, CaseListResponse
-from app.services import FileHandler
+from app.schemas import (
+    CaseCreate, 
+    CaseUpdate, 
+    CaseResponse, 
+    CaseListResponse, 
+    VictimCaseCreate  # ✅ New schema for victim registration
+)
+from app.services import FileHandler, calculate_compensation
 
 router = APIRouter(prefix="/cases", tags=["Cases"])
 file_handler = FileHandler()
 
+
+# ============= HELPER FUNCTIONS =============
 
 def get_user_role(user: User) -> str:
     """Extract and normalize user role to lowercase"""
@@ -25,45 +33,87 @@ def generate_case_number() -> str:
     return f"FC-{datetime.now().strftime('%Y%m%d%H%M%S%f')[:-3]}"
 
 
-@router.post("/", response_model=CaseResponse, status_code=status.HTTP_201_CREATED)
-def create_case(case: CaseCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Create a new case"""
+# ============= CASE REGISTRATION ENDPOINTS =============
+
+@router.post("/victim/register", response_model=CaseResponse, status_code=status.HTTP_201_CREATED)
+def register_victim_case(
+    case_data: VictimCaseCreate, 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    """
+    ✅ FOR VICTIMS ONLY - Simplified case registration with auto-compensation.
+    
+    Required fields (10 total):
+    1. Full Name, 2. Aadhaar Number, 3. FIR Number, 4. Act Type,
+    5. Bank Name, 6. Account Number, 7. IFSC Code,
+    8. Incident Location, 9. Incident Date, 10. Incident Description
+    
+    Compensation is AUTO-CALCULATED based on Act Type:
+    - PCR Act 1955: ₹50,000 (FIR stage)
+    - PoA Act 2015: ₹75,000 (FIR stage)
+    """
+    
     user_role = get_user_role(current_user)
     
-    if user_role not in ["admin", "official", "officer"]:
+    if user_role != "victim":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins and officers can create cases"
+            detail="Only victims can use this endpoint. Officials should use POST /cases/"
         )
     
     try:
+        # ✅ AUTO-CALCULATE COMPENSATION
+        compensation = calculate_compensation(
+            act_type=case_data.act_type.value,
+            stage="FIR"
+        )
+        
+        # Convert date to datetime (for database storage)
+        incident_datetime = datetime.combine(case_data.incident_date, datetime.min.time())
+        
+        # ✅ Get phone and email from logged-in user
+        victim_phone = current_user.phone or "0000000000"
+        victim_email = current_user.email
+        
+        # Create case with auto-calculated compensation
         db_case = Case(
             case_number=generate_case_number(),
-            victim_name=case.victim_name,
-            victim_aadhaar=case.victim_aadhaar,
-            victim_phone=case.victim_phone,
-            victim_email=case.victim_email,
-            incident_description=case.incident_description,
-            incident_date=case.incident_date,
-            incident_location=case.incident_location,
-            stage=case.stage.value,
-            compensation_amount=case.compensation_amount,
-            bank_account_number=case.bank_account_number,
-            ifsc_code=case.ifsc_code,
+            victim_name=case_data.victim_name,
+            victim_aadhaar=case_data.victim_aadhaar,
+            victim_phone=victim_phone,
+            victim_email=victim_email,
+            fir_number=case_data.fir_number,
+            act_type=case_data.act_type.value,
+            bank_name=case_data.bank_name,
+            incident_description=case_data.incident_description,
+            incident_date=incident_datetime,
+            incident_location=case_data.incident_location,
+            stage="FIR",  # New cases always start at FIR
+            status="PENDING",
+            compensation_amount=compensation,  # ✅ AUTO-CALCULATED
+            bank_account_number=case_data.bank_account_number,
+            ifsc_code=case_data.ifsc_code,
             created_by_user_id=current_user.id
         )
         
         db.add(db_case)
         db.commit()
         db.refresh(db_case)
+        
+        print(f"✅ Case {db_case.case_number} created with auto-compensation: ₹{compensation:,.2f}")
+        
         return db_case
+        
     except Exception as e:
         db.rollback()
+        print(f"❌ Error registering case: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create case: {str(e)}"
+            detail=f"Failed to register case: {str(e)}"
         )
 
+# ============= CASE LISTING & RETRIEVAL =============
 
 @router.get("/", response_model=CaseListResponse)
 def list_cases(
@@ -111,7 +161,11 @@ def list_cases(
 
 
 @router.get("/{case_id}", response_model=CaseResponse)
-def get_case(case_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_case(
+    case_id: int, 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
     """Get a single case by ID"""
     case = db.query(Case).filter(Case.id == case_id).first()
     
@@ -141,9 +195,16 @@ def get_case(case_id: int, db: Session = Depends(get_db), current_user: User = D
     return case
 
 
+# ============= CASE UPDATES =============
+
 @router.patch("/{case_id}", response_model=CaseResponse)
-def update_case(case_id: int, case_update: CaseUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Update case status and fields"""
+def update_case(
+    case_id: int, 
+    case_update: CaseUpdate, 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    """Update case status and fields (officials only)"""
     user_role = get_user_role(current_user)
     
     if user_role not in ["admin", "official", "officer"]:
@@ -177,6 +238,8 @@ def update_case(case_id: int, case_update: CaseUpdate, db: Session = Depends(get
             detail=f"Failed to update case: {str(e)}"
         )
 
+
+# ============= DOCUMENT UPLOAD =============
 
 @router.post("/{case_id}/upload", response_model=CaseResponse)
 async def upload_case_documents(
@@ -229,9 +292,15 @@ async def upload_case_documents(
         )
 
 
+# ============= CASE DELETION =============
+
 @router.delete("/{case_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_case(case_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Delete a case"""
+def delete_case(
+    case_id: int, 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a case (admins only)"""
     user_role = get_user_role(current_user)
     
     if user_role not in ["admin", "official", "officer"]:
